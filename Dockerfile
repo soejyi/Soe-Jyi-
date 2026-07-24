@@ -2,22 +2,20 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System dependencies for OpenCV and ddddocr
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Python packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Bot code
 COPY bot.py .
 
-ENV BOT_PORT=8099
+# Render injects PORT env var — bot reads it via BOT_PORT
+ENV BOT_PORT=10000
 
 CMD ["python", "bot.py"]
