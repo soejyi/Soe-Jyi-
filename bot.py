@@ -321,6 +321,9 @@ async def save_rechecked_codes(chat_id_str, recheck_list, sha):
     await update_file_content("result.json", results, sha, f"Update after recheck for {chat_id_str}")
 
 async def check_session_url(session_url):
+    # wifidog / ruijienetworks captive portal URL ဆိုရင် တိုက်ရိုက် valid
+    if ("gw_id" in session_url and "mac=" in session_url) or "sessionId" in session_url:
+        return True
     headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'en-US,en;q=0.9',
@@ -340,7 +343,7 @@ async def check_session_url(session_url):
         async with session.get(session_url, allow_redirects=True, headers=headers) as response:
             text_ = str(response.url)
             print(text_)
-            if "sessionId" in text_:
+            if "sessionId" in text_ or "gw_id" in text_:
                 return True
             else:
                 return False
