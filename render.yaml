@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: telegram-bot
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: BOT_PORT
+        value: 8099
+    healthCheckPath: /
