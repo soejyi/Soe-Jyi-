@@ -23,6 +23,7 @@ success_messages = {}
 success_texts = {}
 limited_messages = {}
 limited_texts = {}
+retry_counts = {}
 captcha_state = {}
 session = None
 _connector = None
@@ -516,7 +517,7 @@ def iter_codes(mode):
             yield all_generator(6)
     raise ValueError(f"Unsupported scan mode: {mode}")
 
-def format_progress(checked, total=None, speed=0):
+def format_progress(checked, total=None, speed=0, retried=0):
     speed_str = f"{speed:,.0f} codes/min"
     if total is not None:
         bar_length = 20
@@ -528,12 +529,14 @@ def format_progress(checked, total=None, speed=0):
             f"📦Checked : {checked:,}/{total:,}\n"
             f"📊Progress : {percent:.2f}%\n"
             f"⚡Speed : {speed_str}\n"
+            f"🔄Retried : {retried:,}\n"
             f"[{bar}]"
         )
     return (
         f"🔍Scanning Codes...\n\n"
         f"📦Checked : {checked:,}\n"
         f"⚡Speed : {speed_str}\n"
+        f"🔄Retried : {retried:,}\n"
         f"📊Status : running\n"
     )
 
@@ -602,7 +605,7 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, prog
 
             elapsed = time.monotonic() - scan_start
             speed = (checked / elapsed * 60) if elapsed > 0 else 0
-            text = format_progress(checked, total, speed)
+            text = format_progress(checked, total, speed, retry_counts.get(chat_id, 0))
             try:
                 await bot.edit_message_text(
                     chat_id=chat_id,
@@ -639,12 +642,14 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, prog
         success_texts.pop(chat_id, None)
         limited_messages.pop(chat_id, None)
         limited_texts.pop(chat_id, None)
+        retry_counts.pop(chat_id, None)
     finally:
         scan_tasks.pop(chat_id, None)
         success_messages.pop(chat_id, None)
         success_texts.pop(chat_id, None)
         limited_messages.pop(chat_id, None)
         limited_texts.pop(chat_id, None)
+        retry_counts.pop(chat_id, None)
 
 def get_mac():
     first_byte = random.choice([0x02, 0x06, 0x0A, 0x0E])
@@ -817,6 +822,7 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
 
         if response and 'request limited' in response:
             print(f"[perform_check] rate limited on code={code}, retrying (attempt {_attempt+1}/3)")
+            retry_counts[chat_id] = retry_counts.get(chat_id, 0) + 1
             continue
         break
 
